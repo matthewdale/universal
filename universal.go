@@ -12,10 +12,15 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
+
+	"github.com/pkg/errors"
 )
 
 // Assert that *httpMessage satisfies the http.ResponseWriter interface.
 var _ http.ResponseWriter = &httpMessage{}
+
+var errTimeout = errors.New("stop timeout reached")
 
 // Message is a task to be completed by a Processor.
 type Message interface {
@@ -113,13 +118,11 @@ func NewService(processor Processor) *Service {
 // source function, blocking until the provided Message source function returns
 // nil.
 //
-// When the provided Message source returns a nil Message, Run starts to shut down,
-// blocking until all running goroutines started by Run have returned or until
-// the provided Context is cancelled, whichever comes first. Any error is returned
-// if the Context is cancelled before all started goroutines complete.
-// TODO: Consider rewriting the Run cancellation without using Contexts, which
-// are typically only for request-scoped cancellation.
-func (svc *Service) Run(ctx context.Context, next func() Message) error {
+// When the provided Message source returns a nil Message, Run starts to shut
+// down, blocking until all running goroutines started by Run have returned or
+// until the shutdownTimeout is reached, whichever comes first. If the
+// shutdownTimeout is reached, Run returns an error.
+func (svc *Service) Run(next func() Message, shutdownTimeout time.Duration) error {
 	for {
 		msg := next()
 		if msg == nil {
@@ -138,10 +141,11 @@ func (svc *Service) Run(ctx context.Context, next func() Message) error {
 	}()
 	select {
 	case <-done:
-	case <-ctx.Done():
+	case <-time.After(shutdownTimeout):
+		return errTimeout
 	}
 
-	return ctx.Err()
+	return nil
 }
 
 func (svc *Service) processAndFinish(msg Message) {

@@ -6,6 +6,7 @@ import (
 	"net/rpc"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -40,15 +41,12 @@ func NewRPCService(finisher RPCFinisher) *RPCService {
 //
 // When the provided RPCMessage source returns a nil RPCMessage, Run starts
 // to shut down, blocking until all running goroutines started by Run have
-// returned or until the provided Context is cancelled, whichever comes first.
-// Any error is returned if the Context is cancelled before all started
-// goroutines complete.
-// TODO: Consider rewriting the Run cancellation without using Contexts, which
-// are typically only for request-scoped cancellation.
+// returned or until the shutdownTimeout is reached, whichever comes first. If
+// the shutdownTimeout is reached, Run returns an error.
 func (svc *RPCService) Run(
-	ctx context.Context,
 	server *rpc.Server,
 	next func() RPCMessage,
+	shutdownTimeout time.Duration,
 ) error {
 	for {
 		msg := next()
@@ -59,8 +57,7 @@ func (svc *RPCService) Run(
 		go svc.serveAndFinish(server, msg)
 	}
 	// Wait until the WaitGroup is done, indicating that all started goroutines
-	// have returned, or until the provided Context is cancelled. Return any
-	// error from the Context, allowing the caller to detect an unclean shutdown.
+	// have returned, or until the shutdownTimeout duration has been reached.
 	done := make(chan struct{})
 	go func() {
 		svc.wg.Wait()
@@ -68,10 +65,11 @@ func (svc *RPCService) Run(
 	}()
 	select {
 	case <-done:
-	case <-ctx.Done():
+	case <-time.After(shutdownTimeout):
+		return errTimeout
 	}
 
-	return ctx.Err()
+	return nil
 }
 
 func (svc *RPCService) serveAndFinish(server *rpc.Server, msg RPCMessage) {

@@ -1,33 +1,199 @@
 package universal
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type testMessage struct {
+	input  io.Reader
+	result *bytes.Buffer
+}
+
+func newTestMessage(msg string) *testMessage {
+	return &testMessage{
+		input:  strings.NewReader(msg),
+		result: new(bytes.Buffer),
+	}
+}
+
+func (msg *testMessage) Context() context.Context    { return context.TODO() }
+func (msg *testMessage) Read(p []byte) (int, error)  { return msg.input.Read(p) }
+func (msg *testMessage) Write(p []byte) (int, error) { return msg.result.Write(p) }
 
 type testProcessor struct {
 	process func(Message) error
 	finish  func(Message, error)
 }
 
-func (tp testProcessor) Process(m Message) error {
-	return tp.process(m)
-}
+func (proc testProcessor) Process(m Message) error     { return proc.process(m) }
+func (proc testProcessor) Finish(m Message, err error) { proc.finish(m, err) }
 
-func (tp testProcessor) Finish(m Message, err error) {
-	tp.finish(m, err)
+func makeMessages(msg string, n int) []Message {
+	messages := make([]Message, n)
+	for i := 0; i < len(messages)-1; i++ {
+		messages[i] = newTestMessage(msg)
+	}
+	messages[len(messages)-1] = nil
+	return messages
 }
 
 func TestService_Run(t *testing.T) {
-	// TODO: Run tests.
+	tests := []struct {
+		description string
+		messages    []Message
+		timeout     time.Duration
+		process     func(*testing.T, *uint64) func(Message) error
+		finish      func(*testing.T, *uint64) func(Message, error)
+		wantErr     error
+	}{
+		{
+			description: "All available messages should be passed to Process then Finish",
+			messages:    makeMessages("test message", 100),
+			timeout:     1 * time.Second,
+			process: func(t *testing.T, i *uint64) func(Message) error {
+				return func(m Message) error {
+					b, err := ioutil.ReadAll(m)
+					require.NoError(t, err, "Error reading message")
+					assert.Equal(
+						t,
+						"test message",
+						string(b),
+						"Expected and actual messages are different")
+					_, err = m.Write([]byte("test result"))
+					require.NoError(t, err, "Error writing message result")
+					atomic.AddUint64(i, 1)
+					return nil
+				}
+			},
+			finish: func(t *testing.T, i *uint64) func(Message, error) {
+				return func(m Message, procErr error) {
+					require.NoError(t, procErr, "Error from Process")
+					message := m.(*testMessage)
+					assert.Equal(
+						t,
+						"test result",
+						string(message.result.Bytes()),
+						"Expected and actual Process results are different")
+					atomic.AddUint64(i, 1)
+				}
+			},
+		},
+		{
+			description: "Any error returned by Process should be passed to Finish",
+			messages:    makeMessages("", 100),
+			timeout:     1 * time.Second,
+			process: func(t *testing.T, i *uint64) func(Message) error {
+				return func(m Message) error {
+					atomic.AddUint64(i, 1)
+					return errors.New("test error")
+				}
+			},
+			finish: func(t *testing.T, i *uint64) func(Message, error) {
+				return func(m Message, procErr error) {
+					assert.EqualError(
+						t,
+						procErr,
+						"test error",
+						"Expected and actual Process errors are different")
+					atomic.AddUint64(i, 1)
+				}
+			},
+		},
+		{
+			description: "Run should wait for all started goroutines to complete before returning",
+			messages:    makeMessages("", 10000),
+			timeout:     1 * time.Second,
+			process: func(t *testing.T, i *uint64) func(Message) error {
+				return func(m Message) error {
+					time.Sleep(10 * time.Millisecond)
+					atomic.AddUint64(i, 1)
+					return nil
+				}
+			},
+			finish: func(t *testing.T, i *uint64) func(Message, error) {
+				return func(m Message, procErr error) {
+					time.Sleep(10 * time.Millisecond)
+					atomic.AddUint64(i, 1)
+				}
+			},
+		},
+		{
+			description: "If the first message is nil, Run should exit immediately without calling Process or Finish",
+			messages:    []Message{nil},
+			timeout:     1 * time.Second,
+			process:     func(*testing.T, *uint64) func(Message) error { return nil },
+			finish:      func(*testing.T, *uint64) func(Message, error) { return nil },
+		},
+		{
+			description: "If the shutdown timeout is reached, Run should return an error",
+			messages:    []Message{newTestMessage(""), nil},
+			timeout:     0,
+			process: func(*testing.T, *uint64) func(Message) error {
+				return func(Message) error {
+					time.Sleep(1 * time.Hour)
+					return nil
+				}
+			},
+			finish: func(*testing.T, *uint64) func(Message, error) {
+				return func(Message, error) {
+					time.Sleep(1 * time.Hour)
+				}
+			},
+			wantErr: errTimeout,
+		},
+	}
+	for _, test := range tests {
+		test := test // Capture range variable.
+		t.Run(test.description, func(t *testing.T) {
+			t.Parallel()
+
+			var processCount uint64
+			var finishCount uint64
+			svc := NewService(testProcessor{
+				process: test.process(t, &processCount),
+				finish:  test.finish(t, &finishCount),
+			})
+			// Make a copy of the test.messages slice header so we don't modify the
+			// test inputs. We're just re-slicing the messages slice to "pop" messages
+			// off the top, so it won't modify the referenced Messages.
+			messages := test.messages
+			err := svc.Run(func() Message {
+				msg := messages[0]
+				messages = messages[1:len(messages)]
+				return msg
+			}, test.timeout)
+			require.Equal(t, test.wantErr, err, "Expected and actual errors are different")
+			// The number of Process and Finish calls is undefined when Run reaches
+			// the shutdown timeout, so return if Run returns the timeout error.
+			if err == errTimeout {
+				return
+			}
+			assert.Equal(
+				t,
+				uint64(len(test.messages)-1),
+				processCount,
+				"Expected and actual number of Process calls are different")
+			assert.Equal(
+				t,
+				uint64(len(test.messages)-1),
+				finishCount,
+				"Expected and actual number of Finish calls are different")
+		})
+	}
 }
 
 type testHTTPError struct {

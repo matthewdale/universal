@@ -45,7 +45,7 @@ func (proc *MyProcessor) Finish(m universal.Message, procErr error) {
 
 func main() {
 	svc := universal.NewService(&MyProcessor{})
-	go svc.Run(context.Background(), func() universal.Message {
+	go svc.Run(func() universal.Message {
 		// Get the next message from a message source.
 		input := MessageSource.GetMessage()
 		return &MyMessage{
@@ -53,7 +53,7 @@ func main() {
 			input:  bytes.NewReader(input.Body),
 			result: new(bytes.Buffer),
 		}
-	})
+	}, 30 * time.Second)
 	http.ListenAndServe(":80", svc)
 }
 ```
@@ -105,7 +105,7 @@ func main() {
 	server.Register(new(Arith))
 
 	svc := universal.NewRPCService(&MyRPCFinisher{})
-	go svc.Run(context.Background(), server, func() universal.RPCMessage {
+	go svc.Run(server, func() universal.RPCMessage {
 		// Get the next message from a message source.
 		input := MessageSource.GetMessage()
 		return &MyRPCMessage{
@@ -116,7 +116,7 @@ func main() {
 				B: input.B,
 			},
 		}
-	})
+	}, 30 * time.Second)
 
 	server.HandleHTTP(rpc.DefaultRPCPath, rpc.DefaultDebugPath)
 	http.ListenAndServe(":80", nil)
