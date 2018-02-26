@@ -26,8 +26,8 @@ func (tp testProcessor) Finish(m Message, err error) {
 	tp.finish(m, err)
 }
 
-func TestRun(t *testing.T) {
-
+func TestService_Run(t *testing.T) {
+	// TODO: Run tests.
 }
 
 type testHTTPError struct {
@@ -46,7 +46,7 @@ func (err testHTTPError) MarshalBinary() ([]byte, error) {
 	return json.Marshal(map[string]string{"error": err.Error()})
 }
 
-func TestServeHTTP(t *testing.T) {
+func TestService_ServeHTTP(t *testing.T) {
 	tests := []struct {
 		description string
 		request     func(net.Addr) (*http.Request, error)

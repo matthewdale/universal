@@ -117,6 +117,8 @@ func NewService(processor Processor) *Service {
 // blocking until all running goroutines started by Run have returned or until
 // the provided Context is cancelled, whichever comes first. Any error is returned
 // if the Context is cancelled before all started goroutines complete.
+// TODO: Consider rewriting the Run cancellation without using Contexts, which
+// are typically only for request-scoped cancellation.
 func (svc *Service) Run(ctx context.Context, next func() Message) error {
 	for {
 		msg := next()

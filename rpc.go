@@ -34,16 +34,18 @@ func NewRPCService(finisher RPCFinisher) *RPCService {
 	return &RPCService{finisher: finisher}
 }
 
-// RunRPC calls the specified RPC method then Finish on all messages returned by
+// Run calls the specified RPC method then Finish on all messages returned by
 // the provided RPCMessage source function, blocking until the provided RPCMessage
 // source function returns nil.
 //
-// When the provided RPCMessage source returns a nil RPCMessage, RunRPC starts
-// to shut down, blocking until all running goroutines started by RunRPC have
+// When the provided RPCMessage source returns a nil RPCMessage, Run starts
+// to shut down, blocking until all running goroutines started by Run have
 // returned or until the provided Context is cancelled, whichever comes first.
 // Any error is returned if the Context is cancelled before all started
 // goroutines complete.
-func (svc *RPCService) RunRPC(
+// TODO: Consider rewriting the Run cancellation without using Contexts, which
+// are typically only for request-scoped cancellation.
+func (svc *RPCService) Run(
 	ctx context.Context,
 	server *rpc.Server,
 	next func() RPCMessage,
