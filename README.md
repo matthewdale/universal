@@ -1,6 +1,6 @@
-# universal [![Build Status](https://travis-ci.org/matthewdale/universal.svg?branch=master)](https://travis-ci.org/matthewdale/universal)
+# universal [![Build Status](https://travis-ci.org/matthewdale/universal.svg?branch=master)](https://travis-ci.org/matthewdale/universal) [![codecov](https://codecov.io/gh/matthewdale/universal/branch/master/graph/badge.svg)](https://codecov.io/gh/matthewdale/universal) [![Go Report Card](https://goreportcard.com/badge/github.com/matthewdale/universal)](https://goreportcard.com/report/github.com/matthewdale/universal) [![GoDoc](https://godoc.org/github.com/matthewdale/universal?status.svg)](https://godoc.org/github.com/matthewdale/universal)
 
-Package universal provides interfaces for expressing message processing logic and utilities that simplify building and running message processing applications.
+Package universal provides interfaces for expressing message processing logic and utilities that simplify building and running message processing applications. It requires Go 1.9 or newer.
 
 There are many different ways to build a message processing application with Go. However, the basic requirements of those applications are typically the same:
 
