@@ -1,4 +1,4 @@
-# universal
+# universal [![Build Status](https://travis-ci.org/matthewdale/universal.svg?branch=master)](https://travis-ci.org/matthewdale/universal)
 
 Package universal provides interfaces for expressing message processing logic and utilities that simplify building and running message processing applications.
 
