@@ -30,7 +30,7 @@ type MyProcessor struct{}
 
 func (proc *MyProcessor) Process(m universal.Message) error {
 	// Read the message, perform work, and write the result.
-	_, err = m.Write([]byte("result"))
+	_, err := m.Write([]byte("result"))
 	return err
 }
 
@@ -53,7 +53,7 @@ func main() {
 			input:  bytes.NewReader(input.Body),
 			result: new(bytes.Buffer),
 		}
-	}, 30 * time.Second)
+	}, 30*time.Second)
 	http.ListenAndServe(":80", svc)
 }
 ```
@@ -95,8 +95,8 @@ func (rw *MyRPCFinisher) Finish(
 	if rpcErr != nil {
 		// Handle any error returned from the RPC method.
 		return
-    }
-    result := r.(*int)
+	}
+	result := r.(*int)
 	MessageSource.SendMessage([]byte(strconv.Itoa(result)))
 }
 
@@ -116,7 +116,7 @@ func main() {
 				B: input.B,
 			},
 		}
-	}, 30 * time.Second)
+	}, 30*time.Second)
 
 	server.HandleHTTP(rpc.DefaultRPCPath, rpc.DefaultDebugPath)
 	http.ListenAndServe(":80", nil)
