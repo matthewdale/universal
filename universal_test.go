@@ -116,10 +116,9 @@ func TestService_Run(t *testing.T) {
 		{
 			description: "Run should wait for all started goroutines to complete before returning",
 			messages:    makeMessages("", 10000),
-			timeout:     1 * time.Second,
+			timeout:     5 * time.Second,
 			process: func(t *testing.T, i *uint64) func(Message) error {
 				return func(m Message) error {
-					time.Sleep(10 * time.Millisecond)
 					atomic.AddUint64(i, 1)
 					return nil
 				}

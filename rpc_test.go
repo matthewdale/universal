@@ -126,7 +126,7 @@ func TestRPCService_Run(t *testing.T) {
 		{
 			description: "Run should wait for all started goroutines to complete before returning",
 			messages:    makeRPCMessages("Arith.Multiply", &Args{A: 2, B: 3}, 10000),
-			timeout:     1 * time.Second,
+			timeout:     5 * time.Second,
 			finish: func(t *testing.T, i *uint64) func(RPCMessage, RPCResult, error) {
 				return func(m RPCMessage, r RPCResult, rpcErr error) {
 					assert.Equal(t, 6, *r.(*int), "Expected and actual results are different")
