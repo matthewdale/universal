@@ -20,7 +20,7 @@ import (
 // Assert that *httpMessage satisfies the http.ResponseWriter interface.
 var _ http.ResponseWriter = &httpMessage{}
 
-var errTimeout = errors.New("stop timeout reached")
+var errTimeout = errors.New("shutdown timeout reached")
 
 // Message is a task to be completed by a Processor.
 type Message interface {
@@ -105,16 +105,21 @@ type Processor interface {
 	Finish(Message, error)
 }
 
+// A Service passes Messages to the Processor. Service provides a Run method for
+// providing Messages directly to the Service and an HTTP handler that passes
+// HTTP request bodies as Messages.
 type Service struct {
 	processor Processor
 	wg        sync.WaitGroup
 }
 
+// NewService creates a new Service that uses the provided Processor to process
+// Messages.
 func NewService(processor Processor) *Service {
 	return &Service{processor: processor}
 }
 
-// Run calls Process then Finish on all messages returned by the provided Message
+// Run calls Process then Finish on all Messages returned by the provided Message
 // source function, blocking until the provided Message source function returns
 // nil.
 //

@@ -44,8 +44,8 @@ func NewRPCService(finisher RPCFinisher) *RPCService {
 // returned or until the shutdownTimeout is reached, whichever comes first. If
 // the shutdownTimeout is reached, Run returns an error.
 func (svc *RPCService) Run(
-	server *rpc.Server,
 	next func() RPCMessage,
+	server *rpc.Server,
 	shutdownTimeout time.Duration,
 ) error {
 	for {
@@ -87,15 +87,16 @@ func (svc *RPCService) serveAndFinish(server *rpc.Server, msg RPCMessage) {
 	svc.finisher.Finish(msg, codec.result, respErr)
 }
 
-// rpcMessageCodec implements the rpc.ServerCodec interface, sourcing the inputs
-// for an rpc.Server.ServeRequest call from the rpc.Request and arguments provided
-// by the RPCMessage. It also collects the returned rpc.Response and result.
+// rpcMessageCodec implements the rpc.ServerCodec interface, getting the RPC
+// method and arguments from the rpc.Request and arguments provided by the
+// RPCMessage. It also collects the returned rpc.Response and result.
 type rpcMessageCodec struct {
 	message  RPCMessage
 	response rpc.Response
 	result   RPCResult
 }
 
+// ReadRequestHeader returns the rpc.Request provided by the RPCMessage.
 func (codec *rpcMessageCodec) ReadRequestHeader(r *rpc.Request) error {
 	*r = codec.message.Request()
 	return nil
@@ -118,9 +119,10 @@ func (codec *rpcMessageCodec) ReadRequestBody(body interface{}) error {
 	vSrc := reflect.Indirect(reflect.ValueOf(codec.message.Args()))
 	if vDst.Type() != vSrc.Type() {
 		return fmt.Errorf(
-			"input body and output body are different types (input is %s, output is %s)",
-			vSrc.Type().String(),
-			vDst.Type().String())
+			"provided arguments and input arguments for %q are different types (want %q, got %q)",
+			codec.message.Request().ServiceMethod,
+			vDst.Type().String(),
+			vSrc.Type().String())
 	}
 	// Calling Set on an unassignable reflect.Value panics. However, that can only
 	// happen if the input body is not a pointer, in which case the Go net/rpc
@@ -129,6 +131,8 @@ func (codec *rpcMessageCodec) ReadRequestBody(body interface{}) error {
 	return nil
 }
 
+// WriteResponse stores the rpc.Response and result in the codec so they can be
+// passed to Finish later.
 func (codec *rpcMessageCodec) WriteResponse(r *rpc.Response, body interface{}) error {
 	if r != nil {
 		codec.response = *r
