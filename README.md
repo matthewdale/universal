@@ -105,7 +105,7 @@ func main() {
 	server.Register(new(Arith))
 
 	svc := universal.NewRPCService(&MyRPCFinisher{})
-	go svc.Run(server, func() universal.RPCMessage {
+	go svc.Run(func() universal.RPCMessage {
 		// Get the next message from a message source.
 		input := MessageSource.GetMessage()
 		return &MyRPCMessage{
@@ -116,7 +116,7 @@ func main() {
 				B: input.B,
 			},
 		}
-	}, 30*time.Second)
+	}, server, 30*time.Second)
 
 	server.HandleHTTP(rpc.DefaultRPCPath, rpc.DefaultDebugPath)
 	http.ListenAndServe(":80", nil)
