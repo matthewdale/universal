@@ -105,7 +105,7 @@ func main() {
 	server.Register(new(Arith))
 
 	svc := universal.NewRPCService(&MyRPCFinisher{})
-	go svc.Run(context.Background(), func() universal.RPCMessage {
+	go svc.Run(context.Background(), server, func() universal.RPCMessage {
 		// Get the next message from a message source.
 		input := MessageSource.GetMessage()
 		return &MyRPCMessage{
